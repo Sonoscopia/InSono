@@ -12,7 +12,7 @@ box4 - top right:
 - 2 SRF05 Ultrasonic sensor
 
 #BREADBOARD
-![Breadboard view](https://github.com/Sonoscopia/InSono/blob/master/BOXES/BOX_E/_fritzing/BoxE_shield_v1_bradboard.png)
+![Breadboard view](https://github.com/Sonoscopia/InSono/blob/master/BOXES/BOX_E/_fritzing/BoxE_shield_v1_breadboard.png)
 
 #PCB
 ![PCB view](https://github.com/Sonoscopia/InSono/blob/master/BOXES/BOX_E/_fritzing/BoxE_shield_v1_pcb.png)
