@@ -10,12 +10,12 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  int val = Serial.parseInt();
-  if(val>0 && val <= VIN) {
+  float val = Serial.parseFloat();
+  if(val>0.1 && val <= VIN) {
     analogWrite(MOTOR, voltage2int(val, VIN));
     Serial.println(val);
   }
-  if(val< -1){
+  if(val< 0.1 && val > 0.f){
     Serial.println("OFF");
     digitalWrite(MOTOR, LOW);
   }

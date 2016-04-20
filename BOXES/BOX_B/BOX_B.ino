@@ -114,7 +114,7 @@ void RandomizeMotors(){
   }
   if(!motor2.active){
     motor2.SetRamp(motor2MaxV, (int)random(2000, 6000)); // (voltage, duration)
-    motor2.SetWait((int)random(0, 3000));
+    motor2.SetWait((int)random(500, 3000));
     motor2.SetLoopDur((int)random(4000, 8000)); // must be called after SetRamp() and/or SetImpulse()
   }
 }
