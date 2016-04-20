@@ -1,116 +1,72 @@
 #include "Utils.h"
 #include "Arduino.h"
 
-// average() variables 
-int Utils::avgArray[10]; // average array 
-int Utils::aValue = 10; // value to average
-int Utils::aIt = 0; // average iterator
-int Utils::averageSize = 10;
-// timer() variables
-int Utils::mTime = 0;
-// ramp() variables
-//int Utils::rampTime = 2000; // ramp time (x rItValue)
-//bool Utils::rdir; // ramp direction (false = ascending, true = descending) 
-//int Utils::rItValue = 1;
-//int Utils::rIt = 0; // ramp iterator 
-
-/************************************************ CONSTRUCTORS ***********************************************/ 
-Utils::Utils(){ 
-  // INIT default AVERAGE VARIABLES
-  for (int i = 0; i < averageSize; i++){
-    avgArray[i] = 0;
-  }
-  // INIT RAMP VARIABLES
-  if (rdir == false ){ rIt = 0; }
-  else{ rIt = rampTime; }
+Utils::Utils(){ // default constructor
+  
 }
 
-Utils::Utils(int aSize){
-  averageSize = aSize; 
-  for (int i = 0; i < averageSize; i++){
-    avgArray[i] = 0;
+//RUNNING AVERAGE
+void Utils::AverageSetup(int _size){
+  iterator = 0;
+  averageSize = _size;
+  average = (int *) calloc (averageSize, sizeof(int));
+  averageValue = 0;
+}
+float Utils::Average(int _s){ // input sample
+  averageValue = 0; // reset average value
+  for(int i = 1; i < averageSize; i++){
+    average[i-1] = average[i];
+    averageValue += average[i-1];
   }
-  // INIT RAMP VARIABLES
-  if (rdir == false ){ rIt = 0; }
-  else{ rIt = rampTime; }
+  average[averageSize-1] = _s;
+  averageValue += _s;
+  averageValue /= averageSize;
+  //Serial.println(averageValue);
+  return averageValue;  
+}
+// CALC ELAPSED TIME (true -> IN) (false -> OUT)
+void Utils::ElapsedSetup(int _in, int _out, int _res){
+  presence = false; // is someone in front of the sensor ?
+  elapsedTimeIn = 0; // elapsed time since beginning of presence
+  elapsedTimeOut = 0; // elapsed time since lack of presence
+
+  timeResolution = _res;
+  thresholdTimeIn = _in; // threshold time with presence to startAll()
+  thresholdTimeOut = _out; // threshold time without presence to stopAll()  
 }
 
-Utils::Utils(int aSize, int t, bool d, int i){
-  //aIt = 0;
-  averageSize = aSize; 
-  for (int i = 0; i < averageSize; i++){
-    avgArray[i] = 0;
+bool Utils::ElapsedTime(bool _b){
+  if(_b){
+    elapsedTimeIn += timeResolution;
+    if(elapsedTimeIn > thresholdTimeIn){
+      presence = true;
+      elapsedTimeOut = 0; // reset elapsed time
+    }  
   }
-  // INIT RAMP VARIABLES
-  rampTime = t; 
-  rdir = d;
-  initDir = rdir;
-  rItValue = i;
-  if (rdir == false ){ rIt = 0; }
-  else{ rIt = rampTime; }
-}
-
-/************************************************ METHODS ***********************************************/
-
-int Utils::ramp(){
-  if(rdir == false){ // ascending
-    rIt += rItValue;
-    if(rIt >= rampTime){
-      rdir = true; 
+  else{
+    elapsedTimeOut += timeResolution;
+    if(elapsedTimeOut > thresholdTimeOut){
+      presence = false;
+      elapsedTimeIn = 0;
     }
   }
-  else{ // descending 
-    rIt -= rItValue;
-    if(rIt <= 0){
-      rdir = false;
-    }
-  }
-  //Serial.println(rIt);
-  return rIt; 
+  return presence; 
 }
 
-void Utils::rampReset(){
-  rdir = initDir;
-  if (rdir == false ){ rIt = 0; }
-  else{ rIt = rampTime; }
-}
-
-float Utils::average(int v){
-  avgArray[aIt] = v;
-  aIt++;
-  // calc mean after 10 values
-  if(aIt > averageSize - 1) { 
-    aValue = 0; // reset average value
-    aIt = 0; // reset average iterator
-    for(int j = 0; j< averageSize - 1; j++){
-      aValue += avgArray[j]; 
-    }
-    aValue /= (float)averageSize;
-    return aValue;
-    }
-}
-
-int Utils::voltage2int(float v, float vin){ // v = desired output voltage (must be < vin)
-  //if(vin <= v){
+// CONVERSIONS
+int Utils::Voltage2Int(float _v, float _vin){ // v = desired output voltage (must be < vin)
+  if(_v <= _vin){
     //Serial.println(v * 255.f / vin);
-    return v * 255.0 / vin; // returns value from 0~255 corresponding to the desired voltage, where 255 = vin
-  //}
+    return int(_v * 255.f / _vin); // returns value from 0~255 corresponding to the desired voltage, where 255 = vin
+  }
+  else return LOW; // safety
+}
+float Utils::Voltage2Float(float _v, float _vin){ // v = desired output voltage (must be < vin)
+  if(_v <= _vin){
+    //Serial.println(v * 255.f / vin);
+    return _v * 255.f / _vin; // returns value from 0~255 corresponding to the desired voltage, where 255 = vin
+  }
+  else return LOW; // safety
 }
 
-float Utils::int2voltage(float c, float vout){
-  return c * vout / HIGH;
-}
 
-float Utils::fmap(float x, float in_min, float in_max, float out_min, float out_max){
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
-int Utils::timer(){
-  return mTime += 1;
-}
-int Utils::timer(int inc){
-  mTime += inc; 
-}
-void Utils::resetTimer(){
-  mTime = 0;
-}
