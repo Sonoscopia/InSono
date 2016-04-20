@@ -22,7 +22,8 @@ Objects: 2 small gongs
 Ultrasonic ultrasonic(TRIG, ECHO);
 Utils utils; // average and elapsedTime/presence functions
 Led led;
-Motor motor; 
+Motor motor;
+float motorMaxV = 2.f; 
 
 bool debug = false;
 
@@ -43,7 +44,7 @@ void setup(){
   thresholdTimeIn = thresholdTimeIn / resolution;
 
   motor = *new Motor(MOTOR, VIN, resolution); // (pin, Vin, resolution)
-  motor.SetImpulse(4.5, resolution); // (voltage, duration)
+  motor.SetImpulse(7.f, resolution); // (voltage, duration)
   motor.SetRamp(2, 4000); // (voltage, duration)
   motor.SetLoopDur(8000); // must be called after SetRamp() and/or SetImpulse()
   

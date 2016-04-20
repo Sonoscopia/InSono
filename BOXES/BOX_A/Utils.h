@@ -17,6 +17,7 @@ public:
   int timeResolution; // ms delay time in loop()
   // Conversions
   int Voltage2Int(float _v, float _vin); // (voltage, VIN)
+  float Voltage2Float(float _v, float _vin);
   
 private: 
   int averageSize; // average sample size

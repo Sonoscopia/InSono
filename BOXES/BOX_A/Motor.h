@@ -10,6 +10,8 @@ public:
   void SetRamp(float _max, int _t);
   void SetImpulse(float _max, int _t);
   void SetLoopDur(int _t); // if loopTime > impulseTime+rampTime there is a pause after the ramp
+  void SetWait(int _t); // set time to wait before running the motor
+  int GetPlayHead(); // return playHead position
   
   void Run();
   void Stop();
@@ -19,7 +21,11 @@ public:
   int impulseDur;
   float impulseMax; // max voltage
   int loopDur;
-     
+  int wait;
+  bool active;
+
+  float rampVal; // ramp value at current timing
+  float rampDec; // ramp decrementation value (depends on rampDur and resolution)
 private: 
   Utils util;
 
@@ -31,9 +37,8 @@ private:
   int pin;
   int resolution; // ms delay time in loop()
   int playHead;
-  float rampVal; // ramp value at current timing
-  float rampDec; // ramp decrementation value (depends on rampDur and resolution)
-  bool active;
+  
+  
 };
 
 #endif

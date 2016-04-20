@@ -61,5 +61,12 @@ int Utils::Voltage2Int(float _v, float _vin){ // v = desired output voltage (mus
   }
   else return LOW; // safety
 }
+float Utils::Voltage2Float(float _v, float _vin){ // v = desired output voltage (must be < vin)
+  if(_v <= _vin){
+    //Serial.println(v * 255.f / vin);
+    return _v * 255.f / _vin; // returns value from 0~255 corresponding to the desired voltage, where 255 = vin
+  }
+  else return LOW; // safety
+}
 
 
