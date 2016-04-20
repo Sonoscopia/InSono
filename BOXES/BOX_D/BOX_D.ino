@@ -1,11 +1,15 @@
 /*
-CAIXA D
+BOX D
+Parts: Arduino Uno, 2 x Relay 220V, 2 RGB Led, 1 HC-SR04 Ultrasonic sensor
+Objects: 3 Aquariums
 */
-// includes
-#include "DistanceSensor.h"
+
+#include "Ultrasonic.h"
+#include "Utils.h"
+#include "Led.h"
 #include "Motor.h"
-#include "LED.h"
-//#include "Utils.h" (not need because Utils is included in Motor.h and LED.h)
+// WATCH OUT !!! 
+#define VIN 5 // Input voltage from power adapter
 
 // LED 1 PINS (RGB) : 
 #define L1RED 11
@@ -16,68 +20,112 @@ CAIXA D
 #define L2GREEN 3
 #define L2BLUE 5
 // MOTOR 1 PIN : relay  
-#define M1 2 
+#define MOTOR1 2 
 // MOTOR 2 PIN : relay
-#define M2 4
+#define MOTOR2 4
 // SENSOR PINS
-#define ECHOPIN 8                            // Pin to receive echo pulse
-#define TRIGPIN 7                           // Pin to send trigger pulse
+#define ECHO 7                            // Pin to receive echo pulse
+#define TRIG 8                           // Pin to send trigger pulse
 
+Ultrasonic ultrasonic(TRIG, ECHO);
+Utils utils; // average and elapsedTime/presence functions
+Led led1, led2;
+Motor motor1, motor2; 
 
-// "components"
-DistanceSensor sensor;
-LED led1, led2;
-Motor m1, m2;
-// utilities
-Utils u; 
+bool debug = false;
 
+int dist; // distance in cm
+int threshold = 80; // threshold distance in cm
+int resolution = 50; // ms delay time in loop()
+int averageSamples = 5; // number of distance samples to average
+// min thresholdTimeIn = resolution, otherwise thresholdTimeIn = resolution
+int thresholdTimeIn = 250; // threshold time with presence to startAll()
+int thresholdTimeOut = 5000; // threshold time without presence to stopAll()
 
-// variables
-int inactivityTime = 10000; // time(ms) needed for deactivation
-bool active = false; 
-int threshDist = 80; // threshold distance in cm
-int distance; 
-int loopDelay = 10; // void loop() delay in milliseconds
+bool presence; // is someone in front of the sensor ?
 
 void setup(){
+  if(debug) Serial.begin(9600);
   Serial.begin(9600);
   
-  u = *new Utils(10); // average uses 10 samples
+  randomSeed(analogRead(0));
   
-  sensor = *new DistanceSensor(TRIGPIN, ECHOPIN);
-  led1 = *new LED(L1RED, L1GREEN, L1BLUE, 0.f, 0.f, 5.f);
-  led2 = *new LED(L2RED, L2GREEN, L2BLUE, 0.f, 0.f, 5.f);
+  thresholdTimeIn = thresholdTimeIn / resolution;
 
-  // m = motor pin, mv = maximum voltage, v = arduino input voltage, t = ramp time, d = initial ramp direction, i = ramp iterator value (ms)
-  m1 = *new Motor(M1, 5, 5, 6000, true, loopDelay);
-  m2 = *new Motor(M2, 5, 5, 6000, false, loopDelay);
+  motor1 = *new Motor(MOTOR1, VIN, resolution); // (pin, Vin, resolution)
+  motor1.SetMode(DIGITAL);
+  motor1.SetImpulse(VIN, resolution); // (voltage, duration)
+  motor1.SetRamp(VIN, 4000); // (voltage, duration)
+  motor1.SetLoopDur(6000); // must be called after SetRamp() and/or SetImpulse()
+  
+  motor2 = *new Motor(MOTOR2, VIN, resolution); // (pin, Vin, resolution)
+  motor2.SetMode(DIGITAL);
+  motor2.SetImpulse(VIN, resolution); // (voltage, duration)
+  motor2.SetRamp(VIN, 4000); // (voltage, duration)
+  motor2.SetWait(1000);
+  motor2.SetLoopDur(6000); // must be called after SetRamp() and/or SetImpulse()
+  
+  led1 = *new Led(L1RED, L1GREEN, L1BLUE, ANALOG);
+  led1.SetRGB(0, 128, 255);
+
+  led2 = *new Led(L2RED, L2GREEN, L2BLUE, ANALOG);
+  led2.SetRGB(0, 128, 255);
+  
+  utils = *new Utils();
+  utils.AverageSetup(averageSamples);
+  for(int i = 0; i < averageSamples; i++){ // fill avereage array
+   utils.Average(ultrasonic.Ranging());
+  }
+  utils.ElapsedSetup(thresholdTimeIn, thresholdTimeOut, resolution);
+
+  delay(1000);
+  // 
 }
 
 void loop(){
-  distance = u.average(sensor.readValues());
-  if(distance != 0 )Serial.println(distance);
-  //Serial.println(u.average(sensor.readValues()));
   
-  if(distance < threshDist && distance > 0 && active == false) {
-    active = true;
-    u.resetTimer();
-  }
-  if (active == true){
-    m1.digitalPause();
-    m2.digitalPause();
-    led1.on();
-    led2.on();
-    //Serial.println(distance);
-  }
-  if(distance > threshDist && u.mTime > inactivityTime){
-    u.resetTimer();
-    active = false;
-    m1.digitalPlay();
-    m2.digitalPlay();
-    led1.off();
-    led2.off();
-  }
-  //Serial.println(u.mTime);
-  u.timer(loopDelay);
-  delay(loopDelay);
+  dist = utils.Average(ultrasonic.Ranging());
+  Debug("distance = ", dist);
+  
+  presence = utils.ElapsedTime(dist < threshold);
+  Debug("presence = ", presence);
+  
+  if (presence) StartAll();
+  else StopAll();
+
+  RandomizeMotors();
+  
+  delay(resolution);
 }
+void StartAll(){
+  led1.On();
+  led2.On();
+  motor1.Run();
+  motor2.Run();
+}
+void StopAll(){
+  led1.Off();
+  led2.Off();
+  motor1.Stop();
+  motor2.Stop();
+}
+
+void RandomizeMotors(){
+  if(!motor1.active){
+    motor1.SetRamp(VIN, (int)random(6000, 12000)); // (voltage, duration)
+    motor1.SetLoopDur((int)random(8000, 16000)); // must be called after SetRamp() and/or SetImpulse()
+  }
+  if(!motor2.active){
+    motor2.SetRamp(VIN, (int)random(6000, 12000)); // (voltage, duration)
+    motor2.SetWait((int)random(2000, 4000));
+    motor2.SetLoopDur((int)random(8000, 16000)); // must be called after SetRamp() and/or SetImpulse()
+  }
+}
+
+void Debug(String _label, int _val){
+  if(debug){
+    Serial.print(_label);
+    Serial.println(_val);
+  }  
+}
+
