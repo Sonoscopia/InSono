@@ -1,11 +1,16 @@
 /*
-CAIXA E
+BOX E - 4 boxes
+Parts: Arduino MEGA, 4 x 12V Motor, 4 RGB Led (1 w/ brightness control only),
+1 HC-SR04 Ultrasonic sensor
+Objects: Medals, Wooden Bars (right top), Rock (middle right), Wood Blocks
 */
-// includes
-#include "DistanceSensor.h"
+
+#include "Ultrasonic.h"
+#include "Utils.h"
+#include "Led.h"
 #include "Motor.h"
-#include "LED.h"
-//#include "Utils.h" (not need because Utils is included in Motor.h and LED.h)
+// WATCH OUT !!! 
+#define VIN 12 // Input voltage from power adapter
 
 // LED 1 PINS (RGB) : 
 #define L1RED 13
@@ -20,130 +25,161 @@ CAIXA E
 #define L3GREEN 6 
 #define L3BLUE 5 
 // LED 4 PINS (L) : 
-#define L4 4
+#define LED4 4
 
 // MOTOR 1 PIN : 
-#define M1 2
+#define MOTOR1 2
 // MOTOR 2 PIN :
-#define M2 3
+#define MOTOR2 3
 // MOTOR 3 PIN : 
-#define M3 44
+#define MOTOR3 44
 // MOTOR 4 PIN :
-#define M4 46
+#define MOTOR4 46
 
 // SENSOR PINS
-#define ECHOPIN1 24                            // Pin to receive echo pulse
-#define TRIGPIN1 22                           // Pin to send trigger pulse
-#define ECHOPIN2 52
-#define TRIGPIN2 50
+//#define ECHOPIN1 24                            
+//#define TRIGPIN1 22                           
+#define ECHO 52 // Pin to receive echo pulse
+#define TRIG 50 // Pin to send trigger pulse
 
+Ultrasonic ultrasonic(TRIG, ECHO);
+Utils utils; // average and elapsedTime/presence functions
+Led led1, led2, led3, led4;
+Motor motor1, motor2, motor3, motor4; 
+float motor1MaxV = 4.f;
+float motor2MaxV = 3.f;
+float motor3MaxV = 5.5;
+float motor4MaxV = 4.f;
+float motor1PeakV = 6.f;
+float motor2PeakV = 6.5;
+float motor3PeakV = 6.5;
+float motor4PeakV = 6.f;
 
-// "components"
-DistanceSensor sensor1, sensor2;
-LED led1, led2, led3, led4;
-Motor m1, m2, m3, m4;
-// utilities
-Utils u; 
-// Arduino supply voltage
-int Vin = 12; // 12v
-// Motor max. voltage
-int Vmax = 7; // 8v
+bool debug = false;
 
-// variables
-int inactivityTime = 10000; // time(ms) needed for deactivation
-bool active = false; 
-int threshDist = 80; // threshold distance in cm
+int dist; // distance in cm
+int threshold = 80; // threshold distance in cm
+int resolution = 50; // ms delay time in loop()
+int averageSamples = 5; // number of distance samples to average
+// min thresholdTimeIn = resolution, otherwise thresholdTimeIn = resolution
+int thresholdTimeIn = 250; // threshold time with presence to startAll()
+int thresholdTimeOut = 8000; // threshold time without presence to stopAll()
 
-int mean[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // mean distance values
-int meanIt = 0; // mean iterator
-float distance = 0.f; 
-
-int distance1, distance2; 
-int loopDelay = 10; // void loop() delay in milliseconds
+bool presence; // is someone in front of the sensor ?
 
 void setup(){
-  Serial.begin(9600);
+  if(debug) Serial.begin(9600);
+  //Serial.begin(9600);
   
-  u = *new Utils(10); // average uses 10 samples
+  randomSeed(analogRead(0));
   
-  sensor1 = *new DistanceSensor(TRIGPIN1, ECHOPIN1);
-  sensor2 = *new DistanceSensor(TRIGPIN2, ECHOPIN2);
-  led1 = *new LED(L1RED, L1GREEN, L1BLUE, 5.f, 5.f, 5.f);
-  led2 = *new LED(L2RED, L2GREEN, L2BLUE, 5.f, 5.f, 5.f);
-  led3 = *new LED(L3RED, L3GREEN, L3BLUE, 5.f, 5.f, 5.f);
-  led4 = *new LED(L4, 5.f);
+  thresholdTimeIn = thresholdTimeIn / resolution;
 
-  // m = motor pin, mv = maximum voltage, v = arduino input voltage, t = ramp time, d = initial ramp direction, i = ramp iterator value (ms)
-  m1 = *new Motor(M1, Vmax, Vin, 4000, true, loopDelay);
-  m2 = *new Motor(M2, Vmax, Vin, 3000, false, loopDelay);
-  m3 = *new Motor(M3, Vmax, Vin, 6000, true, loopDelay);
-  m4 = *new Motor(M4, Vmax, Vin, 9000, false, loopDelay);
+  motor1 = *new Motor(MOTOR1, VIN, resolution); // (pin, Vin, resolution)
+  motor1.SetImpulse(motor1PeakV, resolution); // (voltage, duration)
+  motor1.SetRamp(motor1MaxV, 4000); // (voltage, duration)
+  motor1.SetLoopDur(8000); // must be called after SetRamp() and/or SetImpulse()
+
+  motor2 = *new Motor(MOTOR2, VIN, resolution); // (pin, Vin, resolution)
+  motor2.SetImpulse(motor2PeakV, resolution); // (voltage, duration)
+  motor2.SetRamp(motor2MaxV, 4000); // (voltage, duration)
+  motor2.SetWait(1000);
+  motor2.SetLoopDur(8000); // must be called after SetRamp() and/or SetImpulse()
+
+  motor3 = *new Motor(MOTOR3, VIN, resolution); // (pin, Vin, resolution)
+  motor3.SetImpulse(motor3PeakV, resolution); // (voltage, duration)
+  motor3.SetRamp(motor3MaxV, 4000); // (voltage, duration)
+  motor3.SetWait(2000);
+  motor3.SetLoopDur(8000); // must be called after SetRamp() and/or SetImpulse()
+
+  motor4 = *new Motor(MOTOR4, VIN, resolution); // (pin, Vin, resolution)
+  motor4.SetImpulse(motor4PeakV, resolution); // (voltage, duration)
+  motor4.SetRamp(motor3MaxV, 4000); // (voltage, duration)
+  motor4.SetWait(3000);
+  motor4.SetLoopDur(8000); // must be called after SetRamp() and/or SetImpulse()
   
+  led1 = *new Led(L1RED, L1GREEN, L1BLUE, ANALOG);
+  led1.SetRGB(255, 255, 255);
+  led2 = *new Led(L2RED, L2GREEN, L2BLUE, ANALOG);
+  led2.SetRGB(255, 255, 255);
+  led3 = *new Led(L3RED, L3GREEN, L3BLUE, ANALOG);
+  led3.SetRGB(255, 255, 255);
+  led4 = *new Led(LED4, LED4, LED4, ANALOG);
+  led4.SetRGB(255, 255, 255);
+  
+  utils = *new Utils();
+  utils.AverageSetup(averageSamples);
+  for(int i = 0; i < averageSamples; i++){ // fill avereage array
+   utils.Average(ultrasonic.Ranging());
+  }
+  utils.ElapsedSetup(thresholdTimeIn, thresholdTimeOut, resolution);
+
+  delay(1000);
+  // 
 }
 
 void loop(){
-  distance1 = u.average(sensor1.readValues());
-  distance2 = u.average(sensor2.readValues());
-  Serial.println(distance);
-  readDistance();
   
-  if(distance < threshDist && distance > 0 && active == false) {
-    active = true;
-    u.resetTimer();
-  }
-  if (active == true){
-    m1.play();
-    m2.play();
-    m3.play();
-    m4.play();
-    led1.on();
-    led2.on();
-    led3.on();
-    led4.on();
-    
-    //Serial.println(distance);
-  }
-  if(distance > threshDist && u.mTime > inactivityTime){
-    u.resetTimer();
-    active = false;
-    m1.pause();
-    m2.pause();
-    m3.pause();
-    m4.pause();
-    led1.off();
-    led2.off();
-    led3.off();
-    led4.off();
-  }
-  //Serial.println(u.mTime);
-  u.timer(loopDelay);
-  delay(loopDelay);
+  dist = utils.Average(ultrasonic.Ranging());
+  Debug("distance = ", dist);
+  
+  presence = utils.ElapsedTime(dist < threshold);
+  Debug("presence = ", presence);
+  
+  if (presence) StartAll();
+  else StopAll();
+
+  RandomizeMotors();
+  
+  delay(resolution);
+}
+void StartAll(){
+  led1.On();
+  led2.On();
+  led3.On();
+  led4.On();
+  motor1.Run();
+  motor2.Run();
+  motor3.Run();
+  motor4.Run();
+}
+void StopAll(){
+  led1.Off();
+  led2.Off();
+  led3.Off();
+  led4.Off();
+  motor1.Stop();
+  motor2.Stop();
+  motor3.Stop();
+  motor4.Stop();
 }
 
-void readDistance(){
-  digitalWrite(TRIGPIN1, LOW);                   // Set the trigger pin to low for 2uS
-  delayMicroseconds(2);
-  digitalWrite(TRIGPIN1, HIGH);                  // Send a 10uS high to trigger ranging
-  delayMicroseconds(10);
-  digitalWrite(TRIGPIN1, LOW);                   // Send pin low again
-  int dist = pulseIn(ECHOPIN1, HIGH);        // Read in times pulse
-  dist= dist/58;                        // Calculate distance from time of pulse
-  //Serial.println(dist);                     
-  average(dist);
-}
-
-void average(int d){
-//  distance = 0; 
-  mean[meanIt] = d; 
-  meanIt++;
-  // calc mean after 10 values
-  if(meanIt > 9) { 
-    distance = 0; // reset average distance
-    meanIt = 0; // reset mean iterator
-    for(int j = 0; j< 9; j++){
-      distance += mean[j]; 
-    }
-    distance /= 10.f;
-//    Serial.println(distance);
+void RandomizeMotors(){
+  if(!motor1.active){
+    motor1.SetRamp(motor1MaxV, (int)random(2000, 6000)); // (voltage, duration)
+    motor1.SetLoopDur((int)random(4000, 8000)); // must be called after SetRamp() and/or SetImpulse()
+  }
+  if(!motor2.active){
+    motor2.SetRamp(motor2MaxV, (int)random(2000, 6000)); // (voltage, duration)
+    motor2.SetWait((int)random(500, 3000));
+    motor2.SetLoopDur((int)random(4000, 8000)); // must be called after SetRamp() and/or SetImpulse()
+  }
+  if(!motor3.active){
+    motor3.SetRamp(motor3MaxV, (int)random(2000, 6000)); // (voltage, duration)
+    motor3.SetWait((int)random(500, 3000));
+    motor3.SetLoopDur((int)random(4000, 8000)); // must be called after SetRamp() and/or SetImpulse()
+  }
+  if(!motor4.active){
+    motor4.SetRamp(motor3MaxV, (int)random(2000, 6000)); // (voltage, duration)
+    motor4.SetWait((int)random(500, 3000));
+    motor4.SetLoopDur((int)random(4000, 8000)); // must be called after SetRamp() and/or SetImpulse()
   }
 }
+
+void Debug(String _label, int _val){
+  if(debug){
+    Serial.print(_label);
+    Serial.println(_val);
+  }  
+}
+
